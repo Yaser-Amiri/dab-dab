@@ -1,12 +1,14 @@
 import logging
 import re
 from functools import partial
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 import traceback
 import json
 import subprocess
 from urllib.parse import urlparse, parse_qs
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+from . import execution
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -56,35 +58,63 @@ class Handler(BaseHTTPRequestHandler):
     def _is_user_authorized(self, user: str) -> bool:
         return user in self.authorized_users
 
-    def do_POST(self) -> None:
-        # get user
-        user = self._get_user()
-        if not user:
-            self._return_response({"messge": "Unauthorized"}, 401)
-            return
-
-        if not self._is_user_authorized(user):
-            self._return_response({"messge": "Unauthorized"}, 403)
-            return
-
+    def _parse_body(self) -> Optional[Union[List[Any], Dict[str, Any]]]:
+        content_len = int(self.headers.get("Content-Length"))
+        raw_body = self.rfile.read(content_len)
         try:
+            return json.loads(raw_body)
+        except json.decoder.JSONDecodeError:
+            return None
+
+    def _get_url_parts(self) -> List[str]:
+        url = urlparse(self.path).path
+        return list(filter(lambda x: bool(x), url.split("/")))
+
+    def do_POST(self) -> None:
+        try:
+            # check request content type
             if self.headers.get("Content-Type") != "application/json":
                 self._return_response(
-                    {"error": "content-type must be application/json"}, 400
+                    {"messge": "content-type must be application/json"}, 400
                 )
                 return
 
-            content_len = int(self.headers.get("Content-Length"))
-            raw_body = self.rfile.read(content_len)
-            try:
-                payload = json.loads(raw_body)
-                print(payload)
-            except json.decoder.JSONDecodeError:
+            # get user
+            user = self._get_user()
+            if not user:
+                self._return_response({"messge": "Unauthorized"}, 401)
+                return
+
+            # check authorization
+            if not self._is_user_authorized(user):
+                self._return_response({"messge": "Unauthorized"}, 403)
+                return
+
+            # check authorization
+            body = self._parse_body()
+            if body is None:
                 self._return_response(
-                    {"error": "can not parse the body as json"}, 400
+                    {"messge": "can not parse the body as json"}, 400
                 )
                 return
-            self._return_response({"message": "OK"})
+
+            # parse URL and decide about next action
+            url_parts = self._get_url_parts()
+            is_interactive = self._is_interactive()
+            if len(url_parts) == 2 and url_parts[0] == "scripts":
+                succeed, result = execution.run(user, url_parts[1], body)
+                code = 200 if succeed else 500
+                non_interactinve_messages = {True: "OK", False: "Failed"}
+                msg = (
+                    result
+                    if is_interactive
+                    else non_interactinve_messages[succeed]
+                )
+                self._return_response({"message": msg}, code)
+                return
+
+            # not found
+            self._return_response({"message": "Not Found"}, 404)
             return
         except Exception:
             traceback.print_exc()
@@ -95,7 +125,7 @@ class Handler(BaseHTTPRequestHandler):
         return
 
 
-def run(host: str, port: int, authorized_users: List[str]) -> None:
+def run_server(host: str, port: int, authorized_users: List[str]) -> None:
     logging.info("Trying to create a HTTP server on %s:%s" % (host, port))
     handler = partial(Handler, authorized_users)
     server = ThreadingHTTPServer((host, port), handler)

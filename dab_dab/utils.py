@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Optional, Dict
 import os
 import pwd
 import grp
@@ -23,7 +23,9 @@ def _change_user(uid, gid) -> Callable[[], None]:
     return result
 
 
-def sh(cmd: str, user: str) -> Tuple[int, str, str]:
+def sh(
+    cmd: str, user: str, envs: Optional[Dict[str, str]] = None
+) -> Tuple[int, str, str]:
     """Runs a command in shell
     Args:
         cmd (str): The command which we want to run
@@ -40,6 +42,7 @@ def sh(cmd: str, user: str) -> Tuple[int, str, str]:
         stderr=subprocess.PIPE,
         text=True,
         shell=True,
+        env=envs,
     )
     stdout, stderr = process.communicate()
     return (process.returncode, stdout.strip(), stderr.strip())
