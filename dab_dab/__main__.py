@@ -3,6 +3,7 @@ import logging
 import json
 
 from . import server
+from . import utils
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,7 +17,14 @@ def main():
     logging.info("Args: %s" % args)
     with open("/tmp/dabdab_config.json") as f:
         config = json.load(f)
-    server.run(config.get("host", "localhost"), config.get("port", 9669))
+    group = config.get("group", "dab-dab")
+    if not utils.create_group(group):
+        exit(1)
+    server.run(
+        host=config.get("host", "localhost"),
+        port=config.get("port", 9669),
+        authorized_users=utils.get_members(group),
+    )
 
 
 main()

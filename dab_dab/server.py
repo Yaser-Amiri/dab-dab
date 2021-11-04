@@ -1,12 +1,19 @@
 import logging
-from typing import Dict, Any
+import re
+from functools import partial
+from typing import Dict, Any, Optional, List
 import traceback
 import json
+import subprocess
 from urllib.parse import urlparse, parse_qs
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 
 class Handler(BaseHTTPRequestHandler):
+    def __init__(self, authorized_users: List[str], *args, **kwargs):
+        self.authorized_users = authorized_users
+        super().__init__(*args, **kwargs)
+
     def _return_response(
         self, body: Dict[str, Any], status_code: int = 200
     ) -> None:
@@ -25,8 +32,41 @@ class Handler(BaseHTTPRequestHandler):
         qs = parse_qs(urlparse(self.path).query).get("interactive", [])
         return bool(qs and qs[0].lower() == "true")
 
+    def _get_user(self) -> Optional[str]:
+        cmd = "lsof -i -P -n"
+        lsof_result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True
+        )
+        if lsof_result.returncode != 0:
+            logging.error(
+                "can not find the user, result of 'lsof' command is: '%s'"
+                % lsof_result.stderr
+            )
+            return None
+
+        pattern = r"%s:%s->" % self.client_address
+        user = None
+        for line in lsof_result.stdout.split("\n"):
+            if pattern in line:
+                se = re.search(r"(\S+)\s+(\S+)\s+(\S+).+", line)
+                if se:
+                    user = se.group(3)
+        return user
+
+    def _is_user_authorized(self, user: str) -> bool:
+        return user in self.authorized_users
+
     def do_POST(self) -> None:
-        print(self.path)
+        # get user
+        user = self._get_user()
+        if not user:
+            self._return_response({"messge": "Unauthorized"}, 401)
+            return
+
+        if not self._is_user_authorized(user):
+            self._return_response({"messge": "Unauthorized"}, 403)
+            return
+
         try:
             if self.headers.get("Content-Type") != "application/json":
                 self._return_response(
@@ -55,9 +95,10 @@ class Handler(BaseHTTPRequestHandler):
         return
 
 
-def run(host: str, port: int) -> None:
+def run(host: str, port: int, authorized_users: List[str]) -> None:
     logging.info("Trying to create a HTTP server on %s:%s" % (host, port))
-    server = ThreadingHTTPServer((host, port), Handler)
+    handler = partial(Handler, authorized_users)
+    server = ThreadingHTTPServer((host, port), handler)
     logging.info(
         "HTTP server started successfully, address: %s:%s" % (host, port)
     )
