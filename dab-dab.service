@@ -1,0 +1,16 @@
+[Unit]
+Description=dab-dab
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Environment="LOG_LEVEL=warning"
+WorkingDirectory=/usr/share/dab-dab
+ExecStart=python3 -m dab_dab localhost 9669
+StandardOutput=journal
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
