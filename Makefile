@@ -18,3 +18,20 @@ lint:
 .PHONY: build
 build:
 	python setup.py sdist bdist_wheel
+
+.PHONY: install
+install:
+	find . | grep -E "(__pycache__|\.pyc|\.pyo|mypy_cache$)" | xargs rm -rf
+	rm -rf /usr/local/share/dab-dab
+	cp -r . /usr/local/share/dab-dab
+	cp dab-dab.service `pkg-config systemd --variable=systemdsystemunitdir`/dab-dab.service
+	systemctl daemon-reload
+	systemctl enable dab-dab.service
+	systemctl start dab-dab.service
+
+.PHONY: uninstall
+uninstall:
+	systemctl stop dab-dab.service
+	rm -f `pkg-config systemd --variable=systemdsystemunitdir`/dab-dab.service
+	rm -rf /usr/local/share/dab-dab
+	systemctl daemon-reload

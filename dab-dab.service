@@ -7,7 +7,7 @@ StartLimitIntervalSec=0
 Type=simple
 User=root
 Environment="LOG_LEVEL=warning"
-WorkingDirectory=/usr/share/dab-dab
+WorkingDirectory=/usr/local/share/dab-dab
 ExecStart=python3 -m dab_dab localhost 9669
 StandardOutput=journal
 Restart=no
