@@ -24,12 +24,12 @@ def run(
             or not(False) and the second member is a message. It will
             contain STDOUT of the script or an internal error message.
     """
-    script = Path(get_config_dir(user)) / Path(script_code) / Path("main.py")
-    if not script.is_file():
+    script = Path(get_config_dir(user)) / Path(script_code)
+    if not script.is_dir():
         return False, "You don't have this script."
 
     activate_path = Path(get_venv_dir(user)) / Path("bin/activate")
-    cmd = "source {venv} && python -u {script}".format(
+    cmd = "source {venv} && cd {script} && python -u main.py".format(
         venv=str(activate_path), script=str(script)
     )
     envs = {"PARAMS": json.dumps(params)}
