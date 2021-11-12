@@ -6,7 +6,7 @@ README = (HERE / "README.md").read_text()
 
 setup(
     name="dab-dab",
-    version="0.1",
+    version="1.0",
     author="Yaser Amiri",
     author_email="yaser.amiri95@gmail.com",
     url="https://github.com/Yaser-Amiri/dab-dab",
